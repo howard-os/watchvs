@@ -1,11 +1,16 @@
 // Compact alphabet for 64 characters (2^6 for 6-bit encoding)
 const WATCH_ALPHABET = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
 
-// Encode array of watch IDs to compact string
-function encodeWatchSet(watchIds) {
+// Encode array of watch IDs to compact string with mode prefix
+function encodeWatchSet(watchIds, mode = 'c') {
     // Validate IDs
     if (!watchIds || watchIds.length !== 10) {
         console.error('Invalid watchIds:', watchIds);
+        return null;
+    }
+    
+    if (mode !== 'c' && mode !== 'r') {
+        console.error('Invalid mode:', mode);
         return null;
     }
     
@@ -36,21 +41,37 @@ function encodeWatchSet(watchIds) {
         result += WATCH_ALPHABET[decimal];
     }
     
-    console.log('Encoded:', watchIds, '=>', result);
-    return result;
+    const encoded = `${mode}:${result}`;
+    console.log('Encoded:', watchIds, 'mode:', mode, '=>', encoded);
+    return encoded;
 }
 
-// Decode compact string back to watch ID array
+// Decode compact string back to watch ID array with mode
 function decodeWatchSet(encoded) {
     try {
         if (!encoded || typeof encoded !== 'string') return null;
         
+        // Parse mode and data
+        const colonIndex = encoded.indexOf(':');
+        if (colonIndex !== 1) {
+            console.error('Invalid encoded format (missing mode prefix):', encoded);
+            return null;
+        }
+        
+        const mode = encoded.substring(0, 1);
+        const data = encoded.substring(2);
+        
+        if (mode !== 'c' && mode !== 'r') {
+            console.error('Invalid mode:', mode);
+            return null;
+        }
+        
         // Convert characters back to 6-bit binary
         let binary = '';
-        for (let i = 0; i < encoded.length; i++) {
-            const decimal = WATCH_ALPHABET.indexOf(encoded[i]);
+        for (let i = 0; i < data.length; i++) {
+            const decimal = WATCH_ALPHABET.indexOf(data[i]);
             if (decimal === -1) {
-                console.error('Invalid character in encoded string:', encoded[i]);
+                console.error('Invalid character in encoded string:', data[i]);
                 return null;
             }
             binary += decimal.toString(2).padStart(6, '0');
@@ -64,8 +85,13 @@ function decodeWatchSet(encoded) {
             watchIds.push(id);
         }
         
-        console.log('Decoded:', encoded, '=>', watchIds);
-        return watchIds.length === 10 ? watchIds : null;
+        if (watchIds.length !== 10) {
+            console.error('Decoded wrong number of IDs:', watchIds.length);
+            return null;
+        }
+        
+        console.log('Decoded:', encoded, '=>', watchIds, 'mode:', mode);
+        return { watchIds, mode };
     } catch (e) {
         console.error('Error decoding watch set:', e);
         return null;

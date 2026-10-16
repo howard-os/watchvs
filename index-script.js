@@ -1,8 +1,11 @@
+import { encodeWatchSet, decodeWatchSet } from './watchSetEncoding.js';
+
 const devModeStartup = true; // Set to true for ID-only display (no images/names)
 let displayMode = devModeStartup ? 'dev' : 'normal'; // 'dev' for IDs, 'normal' for images
 
 let watches = []; // Will be populated from JSON
 let allWatchesFromJSON = []; // Cache of all watches from JSON
+let originalWatchSetIds = []; // Store original set for ranking URL
 
 let selectedTop = new Set();
 let selectedBottom = new Set();
@@ -14,74 +17,7 @@ let completedComparisons = 0;
 let totalComparisons = 0;
 let comparisonLimit = 0;
 
-// Compact alphabet for 64 characters (2^6 for 6-bit encoding)
-const WATCH_ALPHABET = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
-
-// Encode array of watch IDs to compact string
-function encodeWatchSet(watchIds) {
-    if (!watchIds || watchIds.length !== 10) {
-        console.error('Invalid watchIds:', watchIds);
-        return null;
-    }
-    
-    let binaryParts = [];
-    for (let i = 0; i < watchIds.length; i++) {
-        const numId = parseInt(watchIds[i]);
-        if (!Number.isInteger(numId) || numId < 1 || numId > 255) {
-            console.error('Invalid ID at index', i, ':', numId);
-            return null;
-        }
-        binaryParts.push(numId.toString(2).padStart(8, '0'));
-    }
-    
-    let binary = binaryParts.join('');
-    
-    while (binary.length % 6 !== 0) {
-        binary += '0';
-    }
-    
-    let result = '';
-    for (let i = 0; i < binary.length; i += 6) {
-        const chunk = binary.substr(i, 6);
-        const decimal = parseInt(chunk, 2);
-        result += WATCH_ALPHABET[decimal];
-    }
-    
-    console.log('Encoded:', watchIds, '=>', result);
-    return result;
-}
-
-// Decode compact string back to watch ID array
-function decodeWatchSet(encoded) {
-    try {
-        if (!encoded || typeof encoded !== 'string') return null;
-        
-        let binary = '';
-        for (let i = 0; i < encoded.length; i++) {
-            const decimal = WATCH_ALPHABET.indexOf(encoded[i]);
-            if (decimal === -1) {
-                console.error('Invalid character in encoded string:', encoded[i]);
-                return null;
-            }
-            binary += decimal.toString(2).padStart(6, '0');
-        }
-        
-        let watchIds = [];
-        for (let i = 0; i + 8 <= binary.length; i += 8) {
-            const chunk = binary.substr(i, 8);
-            const id = parseInt(chunk, 2);
-            watchIds.push(id);
-        }
-        
-        console.log('Decoded:', encoded, '=>', watchIds);
-        return watchIds.length === 10 ? watchIds : null;
-    } catch (e) {
-        console.error('Error decoding watch set:', e);
-        return null;
-    }
-}
-
-// Load watches from JSON and pick 10 randomly
+// Load watches from JSON and handle both choice and ranking modes
 async function loadWatches() {
     try {
         const response = await fetch('watches-200/watches.json');
@@ -91,17 +27,25 @@ async function loadWatches() {
         const hashParam = window.location.hash.slice(1); // Remove # prefix
         
         let selectedWatchIds;
+        let currentMode = 'c'; // default to choice mode
+        let decodedResult;
+        
         if (hashParam) {
-            selectedWatchIds = decodeWatchSet(hashParam);
+            decodedResult = decodeWatchSet(hashParam);
+            if (decodedResult) {
+                selectedWatchIds = decodedResult.watchIds;
+                currentMode = decodedResult.mode;
+            }
         }
         
         // If no valid URL set, pick 10 random watches and update URL
         if (!selectedWatchIds || selectedWatchIds.length !== 10) {
             const shuffled = allWatchesFromJSON.filter(w => w.id).sort(() => Math.random() - 0.5);
             selectedWatchIds = shuffled.slice(0, 10).map(w => w.id);
+            currentMode = 'c';
             
             // Encode IDs and update URL hash
-            const encoded = encodeWatchSet(selectedWatchIds);
+            const encoded = encodeWatchSet(selectedWatchIds, 'c');
             if (encoded) {
                 window.history.replaceState({}, '', `#${encoded}`);
             } else {
@@ -110,27 +54,55 @@ async function loadWatches() {
             }
         }
         
-        // Look up watches by ID and build watches array
-        watches = selectedWatchIds.map((watchId, index) => {
-            const watch = allWatchesFromJSON.find(w => w.id === watchId);
-            if (!watch) return null;
-            
-            let image = watch.image;
-            if (image === 'placeholder') {
-                // Pick random image from watch-images
-                const imageNum = Math.floor(Math.random() * 11) + 1;
-                const ext = imageNum === 11 ? 'png' : 'jpg';
-                image = `watch-images/watch-${imageNum}.${ext}`;
-            }
-            return {
-                id: index + 1,
-                jsonId: watch.id,
-                name: watch.name,
-                image: image
-            };
-        }).filter(w => w !== null);
+        // Store the original set IDs for later ranking URL generation
+        originalWatchSetIds = selectedWatchIds;
         
-        initializeSelection();
+        // Handle ranking mode: load watches in ranked order
+        if (currentMode === 'r') {
+            // In ranking mode, the IDs are already in ranked order
+            watches = selectedWatchIds.map((watchId, index) => {
+                const watch = allWatchesFromJSON.find(w => w.id === watchId);
+                if (!watch) return null;
+                
+                let image = watch.image;
+                if (image === 'placeholder') {
+                    const imageNum = Math.floor(Math.random() * 11) + 1;
+                    const ext = imageNum === 11 ? 'png' : 'jpg';
+                    image = `watch-images/watch-${imageNum}.${ext}`;
+                }
+                return {
+                    id: index + 1,
+                    jsonId: watch.id,
+                    name: watch.name,
+                    image: image
+                };
+            }).filter(w => w !== null);
+            
+            // Skip to results view
+            allWatches = watches;
+            showResults();
+        } else {
+            // Choice mode: load watches in random order for ranking
+            watches = selectedWatchIds.map((watchId, index) => {
+                const watch = allWatchesFromJSON.find(w => w.id === watchId);
+                if (!watch) return null;
+                
+                let image = watch.image;
+                if (image === 'placeholder') {
+                    const imageNum = Math.floor(Math.random() * 11) + 1;
+                    const ext = imageNum === 11 ? 'png' : 'jpg';
+                    image = `watch-images/watch-${imageNum}.${ext}`;
+                }
+                return {
+                    id: index + 1,
+                    jsonId: watch.id,
+                    name: watch.name,
+                    image: image
+                };
+            }).filter(w => w !== null);
+            
+            initializeSelection();
+        }
     } catch (error) {
         console.error('Error loading watches:', error);
         alert('Could not load watch list. Please check the JSON file.');
@@ -482,6 +454,12 @@ function selectWinner(watchNumber) {
 }
 
 function finishComparisons() {
+    showResults();
+}
+
+function showResults() {
+    document.getElementById('selectionSectionTop').classList.remove('active');
+    document.getElementById('selectionSectionBottom').classList.remove('active');
     document.getElementById('comparisonSection').classList.remove('active');
     document.getElementById('resultsSection').classList.add('active');
     document.getElementById('aboutLink').style.display = 'block';
@@ -509,8 +487,31 @@ function finishComparisons() {
         rankedList.appendChild(li);
     });
     
-    // Save rankings to sessionStorage
-    sessionStorage.setItem('watchRankerFinalRankings', JSON.stringify(allWatches));
+    // Generate ranking URL with the final order
+    const rankedIds = allWatches.map(w => w.jsonId);
+    const rankingUrl = encodeWatchSet(rankedIds, 'r');
+    if (rankingUrl) {
+        const fullUrl = `#${rankingUrl}`;
+        document.getElementById('shareRankingUrl').value = window.location.origin + window.location.pathname + fullUrl;
+        window.history.replaceState({}, '', fullUrl);
+    }
+}
+
+function copyShareUrl() {
+    const shareUrl = document.getElementById('shareRankingUrl');
+    shareUrl.select();
+    
+    try {
+        document.execCommand('copy');
+        const button = event.target;
+        const originalText = button.textContent;
+        button.textContent = '✓ Copied!';
+        setTimeout(() => {
+            button.textContent = originalText;
+        }, 2000);
+    } catch (err) {
+        console.error('Failed to copy:', err);
+    }
 }
 
 function downloadResults() {
@@ -553,7 +554,13 @@ function restart() {
     document.getElementById('resultsSection').classList.remove('active');
     document.getElementById('comparisonSection').classList.remove('active');
     document.getElementById('aboutLink').style.display = 'block';
-    sessionStorage.removeItem('watchRankerFinalRankings');
+    
+    // Go back to choice mode with same watch set
+    const choiceUrl = encodeWatchSet(originalWatchSetIds, 'c');
+    if (choiceUrl) {
+        window.history.replaceState({}, '', `#${choiceUrl}`);
+    }
+    
     initializeSelection();
     updateSelectionUI();
 }
@@ -563,45 +570,22 @@ function loadNewSet() {
     window.history.replaceState({}, '', window.location.pathname);
     location.reload();
 }
+
+// Expose functions to global scope for HTML onclick handlers
+window.loadWatches = loadWatches;
+window.loadNewSet = loadNewSet;
+window.initializeSelection = initializeSelection;
+window.updateSelectionUI = updateSelectionUI;
+window.moveToBottomSelection = moveToBottomSelection;
+window.backToTopSelection = backToTopSelection;
+window.skipToResults = skipToResults;
+window.startComparisons = startComparisons;
+window.selectWinner = selectWinner;
+window.finishComparisons = finishComparisons;
+window.downloadResults = downloadResults;
+window.copyShareUrl = copyShareUrl;
+window.restart = restart;
+
 window.addEventListener('load', () => {
-    // Check if we have saved rankings
-    const savedRankings = sessionStorage.getItem('watchRankerFinalRankings');
-    if (savedRankings) {
-        try {
-            allWatches = JSON.parse(savedRankings);
-            // Show results section directly
-            document.getElementById('selectionSectionTop').classList.remove('active');
-            document.getElementById('selectionSectionBottom').classList.remove('active');
-            document.getElementById('comparisonSection').classList.remove('active');
-            document.getElementById('resultsSection').classList.add('active');
-            
-            // Display the rankings
-            const rankedList = document.getElementById('rankedList');
-            rankedList.innerHTML = '';
-            allWatches.forEach((watch, index) => {
-                const li = document.createElement('li');
-                li.className = 'ranked-item';
-                
-                if (displayMode === 'dev') {
-                    li.innerHTML = `
-                        <div class="rank-number">${index + 1}</div>
-                        <div class="watch-name">Watch ${watch.jsonId}</div>
-                    `;
-                } else {
-                    li.innerHTML = `
-                        <div class="rank-number">${index + 1}</div>
-                        <img class="rank-image" src="${watch.image}" alt="Watch ${watch.name}">
-                        <div class="watch-name">${watch.name}</div>
-                    `;
-                }
-                
-                rankedList.appendChild(li);
-            });
-        } catch (e) {
-            console.error('Error loading saved rankings:', e);
-            loadWatches();
-        }
-    } else {
-        loadWatches();
-    }
+    loadWatches();
 });
