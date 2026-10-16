@@ -1,7 +1,8 @@
-const devModeStartup = false; // Set to true for ID-only display (no images/names)
+const devModeStartup = true; // Set to true for ID-only display (no images/names)
 let displayMode = devModeStartup ? 'dev' : 'normal'; // 'dev' for IDs, 'normal' for images
 
 let watches = []; // Will be populated from JSON
+let allWatchesFromJSON = []; // Cache of all watches from JSON
 
 let selectedTop = new Set();
 let selectedBottom = new Set();
@@ -13,15 +14,107 @@ let completedComparisons = 0;
 let totalComparisons = 0;
 let comparisonLimit = 0;
 
+// Compact alphabet for 64 characters (2^6 for 6-bit encoding)
+const WATCH_ALPHABET = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
+
+// Encode array of watch IDs to compact string
+function encodeWatchSet(watchIds) {
+    if (!watchIds || watchIds.length !== 10) {
+        console.error('Invalid watchIds:', watchIds);
+        return null;
+    }
+    
+    let binaryParts = [];
+    for (let i = 0; i < watchIds.length; i++) {
+        const numId = parseInt(watchIds[i]);
+        if (!Number.isInteger(numId) || numId < 1 || numId > 255) {
+            console.error('Invalid ID at index', i, ':', numId);
+            return null;
+        }
+        binaryParts.push(numId.toString(2).padStart(8, '0'));
+    }
+    
+    let binary = binaryParts.join('');
+    
+    while (binary.length % 6 !== 0) {
+        binary += '0';
+    }
+    
+    let result = '';
+    for (let i = 0; i < binary.length; i += 6) {
+        const chunk = binary.substr(i, 6);
+        const decimal = parseInt(chunk, 2);
+        result += WATCH_ALPHABET[decimal];
+    }
+    
+    console.log('Encoded:', watchIds, '=>', result);
+    return result;
+}
+
+// Decode compact string back to watch ID array
+function decodeWatchSet(encoded) {
+    try {
+        if (!encoded || typeof encoded !== 'string') return null;
+        
+        let binary = '';
+        for (let i = 0; i < encoded.length; i++) {
+            const decimal = WATCH_ALPHABET.indexOf(encoded[i]);
+            if (decimal === -1) {
+                console.error('Invalid character in encoded string:', encoded[i]);
+                return null;
+            }
+            binary += decimal.toString(2).padStart(6, '0');
+        }
+        
+        let watchIds = [];
+        for (let i = 0; i + 8 <= binary.length; i += 8) {
+            const chunk = binary.substr(i, 8);
+            const id = parseInt(chunk, 2);
+            watchIds.push(id);
+        }
+        
+        console.log('Decoded:', encoded, '=>', watchIds);
+        return watchIds.length === 10 ? watchIds : null;
+    } catch (e) {
+        console.error('Error decoding watch set:', e);
+        return null;
+    }
+}
+
 // Load watches from JSON and pick 10 randomly
 async function loadWatches() {
     try {
         const response = await fetch('watches-200/watches.json');
-        const allWatchesFromJSON = await response.json();
+        allWatchesFromJSON = await response.json();
         
-        // Pick 10 random watches
-        const shuffled = allWatchesFromJSON.sort(() => Math.random() - 0.5);
-        watches = shuffled.slice(0, 10).map((watch, index) => {
+        // Check if there's a watch set in the URL hash
+        const hashParam = window.location.hash.slice(1); // Remove # prefix
+        
+        let selectedWatchIds;
+        if (hashParam) {
+            selectedWatchIds = decodeWatchSet(hashParam);
+        }
+        
+        // If no valid URL set, pick 10 random watches and update URL
+        if (!selectedWatchIds || selectedWatchIds.length !== 10) {
+            const shuffled = allWatchesFromJSON.filter(w => w.id).sort(() => Math.random() - 0.5);
+            selectedWatchIds = shuffled.slice(0, 10).map(w => w.id);
+            
+            // Encode IDs and update URL hash
+            const encoded = encodeWatchSet(selectedWatchIds);
+            if (encoded) {
+                window.history.replaceState({}, '', `#${encoded}`);
+            } else {
+                console.error('Failed to encode watch set, using first 10');
+                selectedWatchIds = allWatchesFromJSON.slice(0, 10).map(w => w.id);
+            }
+        }
+        
+        // Look up watches by ID and build watches array
+        watches = selectedWatchIds.map((watchId, index) => {
+            const watch = allWatchesFromJSON.find(w => w.id === watchId);
+            if (!watch) return null;
+            
             let image = watch.image;
             if (image === 'placeholder') {
                 // Pick random image from watch-images
@@ -31,10 +124,11 @@ async function loadWatches() {
             }
             return {
                 id: index + 1,
+                jsonId: watch.id,
                 name: watch.name,
                 image: image
             };
-        });
+        }).filter(w => w !== null);
         
         initializeSelection();
     } catch (error) {
@@ -52,7 +146,7 @@ function initializeSelection() {
         box.className = 'watch-box';
         
         if (displayMode === 'dev') {
-            box.textContent = watch.id;
+            box.textContent = watch.jsonId;
             box.style.fontSize = '2.5rem';
             box.style.fontWeight = 'bold';
             box.style.background = '#f0f0f0';
@@ -141,7 +235,7 @@ function moveToBottomSelection() {
             box.className = 'watch-box';
             
             if (displayMode === 'dev') {
-                box.textContent = watch.id;
+                box.textContent = watch.jsonId;
                 box.style.fontSize = '2.5rem';
                 box.style.fontWeight = 'bold';
                 box.style.background = '#f0f0f0';
@@ -347,12 +441,12 @@ function displayComparison(watch1, watch2, callback) {
     
     if (displayMode === 'dev') {
         document.getElementById('image1').style.display = 'none';
-        document.getElementById('label1').textContent = display1.id;
+        document.getElementById('label1').textContent = display1.jsonId;
         document.getElementById('label1').style.fontSize = '3rem';
         document.getElementById('label1').style.paddingTop = '150px';
 
         document.getElementById('image2').style.display = 'none';
-        document.getElementById('label2').textContent = display2.id;
+        document.getElementById('label2').textContent = display2.jsonId;
         document.getElementById('label2').style.fontSize = '3rem';
         document.getElementById('label2').style.paddingTop = '150px';
     } else {
@@ -402,7 +496,7 @@ function finishComparisons() {
         if (displayMode === 'dev') {
             li.innerHTML = `
                 <div class="rank-number">${index + 1}</div>
-                <div class="watch-name">Watch ${watch.id}</div>
+                <div class="watch-name">Watch ${watch.jsonId}</div>
             `;
         } else {
             li.innerHTML = `
@@ -423,7 +517,7 @@ function downloadResults() {
     let markdown = '# My Watch Rankings\n\n';
     allWatches.forEach((watch, index) => {
         if (displayMode === 'dev') {
-            markdown += `${index + 1}. Watch ${watch.id}\n`;
+            markdown += `${index + 1}. Watch ${watch.jsonId}\n`;
         } else {
             markdown += `${index + 1}. ${watch.name}\n`;
         }
@@ -464,7 +558,11 @@ function restart() {
     updateSelectionUI();
 }
 
-// Initialize on load
+function loadNewSet() {
+    // Clear hash and reload
+    window.history.replaceState({}, '', window.location.pathname);
+    location.reload();
+}
 window.addEventListener('load', () => {
     // Check if we have saved rankings
     const savedRankings = sessionStorage.getItem('watchRankerFinalRankings');
@@ -487,7 +585,7 @@ window.addEventListener('load', () => {
                 if (displayMode === 'dev') {
                     li.innerHTML = `
                         <div class="rank-number">${index + 1}</div>
-                        <div class="watch-name">Watch ${watch.id}</div>
+                        <div class="watch-name">Watch ${watch.jsonId}</div>
                     `;
                 } else {
                     li.innerHTML = `
