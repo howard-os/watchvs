@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About - Watch Ranking Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 700px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            padding: 50px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+
+        .subtitle {
+            color: #667eea;
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+        }
+
+        h2 {
+            color: #333;
+            font-size: 1.3rem;
+            margin-top: 25px;
+            margin-bottom: 12px;
+        }
+
+        p {
+            color: #555;
+            line-height: 1.7;
+            margin-bottom: 15px;
+            font-size: 1rem;
+        }
+
+        ul {
+            color: #555;
+            line-height: 1.8;
+            margin-left: 25px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 10px;
+        }
+
+        .highlight {
+            background: #f0f0f0;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 30px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            color: #764ba2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>How It Works</h1>
+        <p class="subtitle">Hybrid Partial Bubble Sort with User-Guided Tiers</p>
+
+        <h2>The Process</h2>
+        <ol>
+            <li><strong>User Input Phase:</strong> You select your 5 favorite watches and 5 least favorite watches from the full collection</li>
+            <li><strong>Normalization:</strong> Selections are sorted by watch ID to remove any insertion-order bias</li>
+            <li><strong>Tier Setup:</strong> Creates 3 tiers:
+                <ul>
+                    <li>Top 5 (your selected favorites, normalized)</li>
+                    <li>Middle 1 (the unselected watch)</li>
+                    <li>Bottom 5 (your selected least favorites, normalized)</li>
+                </ul>
+            </li>
+            <li><strong>Limited Bubble Sort:</strong> Runs bubble sort but stops after ~22 comparisons:
+                <ul>
+                    <li>Phase 1: Fully sorts top 5 + middle watch (~10-15 comparisons)</li>
+                    <li>Phase 2: Rough sorts bottom 5 (~5-8 comparisons in 1-2 passes)</li>
+                </ul>
+            </li>
+            <li><strong>Results:</strong> You get your final ranking with precise ordering at the top</li>
+        </ol>
+
+        <h2>Why This Method?</h2>
+        <div class="highlight">
+            <p><strong>Full bubble sort</strong> requires 55 comparisons for 11 items. This hybrid approach uses only ~22 comparisons—roughly 40% of the full cost.</p>
+        </div>
+
+        <p><strong>Key insight:</strong> You care much more about your top 5 being ranked accurately than about the exact ordering of your least favorites. By precisely sorting only what matters and rough-sorting the rest, we get fast, meaningful rankings.</p>
+
+        <p><strong>Trade-off:</strong> Precision in the top tier, speed overall, and a roughly-ordered bottom tier.</p>
+
+        <a href="index.html" class="back-link">← Start Ranking</a>
+    </div>
+</body>
+</html>
