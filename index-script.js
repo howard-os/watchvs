@@ -1,19 +1,7 @@
 const devModeStartup = false; // Set to true for ID-only display (no images/names)
 let displayMode = devModeStartup ? 'dev' : 'normal'; // 'dev' for IDs, 'normal' for images
 
-const watches = [
-    { id: 6, name: 'Nomos', image: 'watch-images/watch-1.jpg' },
-    { id: 4, name: 'Tag', image: 'watch-images/watch-2.jpg' },
-    { id: 11, name: 'Patek', image: 'watch-images/watch-3.jpg' },
-    { id: 8, name: 'Cartier', image: 'watch-images/watch-4.jpg' },
-    { id: 2, name: 'Rolex', image: 'watch-images/watch-5.jpg' },
-    { id: 1, name: 'GS', image: 'watch-images/watch-6.jpg' },
-    { id: 3, name: 'IWC', image: 'watch-images/watch-7.jpg' },
-    { id: 5, name: 'VC', image: 'watch-images/watch-8.jpg' },
-    { id: 10, name: 'Lange', image: 'watch-images/watch-9.jpg' },
-    { id: 9, name: 'JLC', image: 'watch-images/watch-10.jpg' },
-    { id: 7, name: 'Omega', image: 'watch-images/watch-11.png' }
-];
+let watches = []; // Will be populated from JSON
 
 let selectedTop = new Set();
 let selectedBottom = new Set();
@@ -24,6 +12,36 @@ let currentIndex = 0;
 let completedComparisons = 0;
 let totalComparisons = 0;
 let comparisonLimit = 0;
+
+// Load watches from JSON and pick 10 randomly
+async function loadWatches() {
+    try {
+        const response = await fetch('watches-200/watches.json');
+        const allWatchesFromJSON = await response.json();
+        
+        // Pick 10 random watches
+        const shuffled = allWatchesFromJSON.sort(() => Math.random() - 0.5);
+        watches = shuffled.slice(0, 10).map((watch, index) => {
+            let image = watch.image;
+            if (image === 'placeholder') {
+                // Pick random image from watch-images
+                const imageNum = Math.floor(Math.random() * 11) + 1;
+                const ext = imageNum === 11 ? 'png' : 'jpg';
+                image = `watch-images/watch-${imageNum}.${ext}`;
+            }
+            return {
+                id: index + 1,
+                name: watch.name,
+                image: image
+            };
+        });
+        
+        initializeSelection();
+    } catch (error) {
+        console.error('Error loading watches:', error);
+        alert('Could not load watch list. Please check the JSON file.');
+    }
+}
 
 function initializeSelection() {
     const grid = document.getElementById('watchGrid');
@@ -72,12 +90,12 @@ function toggleSelection(watchId) {
         if (selectedTop.has(watchId)) {
             selectedTop.delete(watchId);
             box.classList.remove('selected-top');
-        } else if (selectedTop.size < 5) {
+        } else if (selectedTop.size < 3) {
             selectedTop.add(watchId);
             box.classList.add('selected-top');
             
-            // Auto-advance when 5th item selected
-            if (selectedTop.size === 5) {
+            // Auto-advance when 3rd item selected
+            if (selectedTop.size === 3) {
                 setTimeout(() => moveToBottomSelection(), 300);
             }
         }
@@ -86,7 +104,7 @@ function toggleSelection(watchId) {
         if (selectedBottom.has(watchId)) {
             selectedBottom.delete(watchId);
             box.classList.remove('selected-bottom');
-        } else if (selectedBottom.size < 5) {
+        } else if (selectedBottom.size < 3) {
             selectedBottom.add(watchId);
             box.classList.add('selected-bottom');
         }
@@ -98,12 +116,12 @@ function updateSelectionUI() {
     const isTopPhase = document.getElementById('selectionSectionTop').classList.contains('active');
     
     if (isTopPhase) {
-        document.getElementById('topCount').textContent = `${selectedTop.size} / 5`;
+        document.getElementById('topCount').textContent = `${selectedTop.size} / 3`;
     } else {
-        document.getElementById('bottomCount').textContent = `${selectedBottom.size} / 5`;
+        document.getElementById('bottomCount').textContent = `${selectedBottom.size} / 3`;
         
-        // Auto-advance when 5th item selected
-        if (selectedBottom.size === 5) {
+        // Auto-advance when 3rd item selected
+        if (selectedBottom.size === 3) {
             setTimeout(() => startComparisons(), 300);
         }
     }
@@ -161,12 +179,12 @@ function resetSelection() {
 }
 
 function skipToResults() {
-    // Randomly select 5 watches as top 5
+    // Randomly select 3 watches as top 3
     const shuffled = [...watches].sort(() => Math.random() - 0.5);
-    const topWatches = shuffled.slice(0, 5).sort((a, b) => a.id - b.id);
-    const remaining = shuffled.slice(5);
-    const bottomWatches = remaining.slice(0, 5).sort((a, b) => a.id - b.id);
-    middleWatches = remaining.slice(5);
+    const topWatches = shuffled.slice(0, 3).sort((a, b) => a.id - b.id);
+    const remaining = shuffled.slice(3);
+    const bottomWatches = remaining.slice(0, 3).sort((a, b) => a.id - b.id);
+    middleWatches = remaining.slice(3);
 
     allWatches = [...topWatches, ...middleWatches, ...bottomWatches];
 
@@ -207,6 +225,9 @@ function startComparisons() {
     // Prepare rankings
     allWatches = [];
     
+    // Hide about link
+    document.getElementById('aboutLink').style.display = 'none';
+    
     // Normalize selection order by sorting by watch ID
     const topWatches = Array.from(selectedTop)
         .sort((a, b) => a - b)
@@ -217,7 +238,7 @@ function startComparisons() {
         !selectedTop.has(w.id) && !selectedBottom.has(w.id)
     );
     
-    // Bottom 5 will be placed last, also sorted by ID
+    // Bottom 3 will be placed last, also sorted by ID
     const bottomWatches = Array.from(selectedBottom)
         .sort((a, b) => a - b)
         .map(id => watches.find(w => w.id === id));
@@ -225,8 +246,8 @@ function startComparisons() {
     // Initialize all watches
     allWatches = [...topWatches, ...middleWatches, ...bottomWatches];
     
-    // Comparisons: top 5 needs ~10, middle 1 needs ~3, bottom 5 needs ~5-8
-    comparisonLimit = 22;
+    // Comparisons: top 3 needs ~4, middle 4 needs ~6, bottom 3 needs ~3-5
+    comparisonLimit = 13;
     completedComparisons = 0;
     currentPass = 0;
     currentIndex = 0;
@@ -369,6 +390,7 @@ function selectWinner(watchNumber) {
 function finishComparisons() {
     document.getElementById('comparisonSection').classList.remove('active');
     document.getElementById('resultsSection').classList.add('active');
+    document.getElementById('aboutLink').style.display = 'block';
 
     const rankedList = document.getElementById('rankedList');
     rankedList.innerHTML = '';
@@ -436,6 +458,7 @@ function restart() {
     document.getElementById('selectionSectionBottom').classList.remove('active');
     document.getElementById('resultsSection').classList.remove('active');
     document.getElementById('comparisonSection').classList.remove('active');
+    document.getElementById('aboutLink').style.display = 'block';
     sessionStorage.removeItem('watchRankerFinalRankings');
     initializeSelection();
     updateSelectionUI();
@@ -478,9 +501,9 @@ window.addEventListener('load', () => {
             });
         } catch (e) {
             console.error('Error loading saved rankings:', e);
-            initializeSelection();
+            loadWatches();
         }
     } else {
-        initializeSelection();
+        loadWatches();
     }
 });

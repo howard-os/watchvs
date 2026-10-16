@@ -9,17 +9,16 @@
 <body>
     <div class="container">
         <button id="displayToggle" class="display-toggle" onclick="toggleDisplayMode()">Show Images</button>
-        <a href="about.html" class="about-link">? How it works</a>
+        <a href="about.html" class="about-link" id="aboutLink">? How it works</a>
         
         <!-- Selection Section - Top 5 -->
         <div class="selection-section active" id="selectionSectionTop">
-            <h1>Watch Ranking Tool</h1>
-            <p class="instructions">Select your 5 favorite watches</p>
+            <h1>Select your 3 favorite watches</h1>
 
             <div class="selection-info">
                 <div>
-                    <div class="selection-count" id="topCount">0 / 5</div>
-                    <div style="font-size: 0.9rem; color: #666;">Top 5 Selected</div>
+                    <div class="selection-count" id="topCount">0 / 3</div>
+                    <div style="font-size: 0.9rem; color: #666;">Top 3 Selected</div>
                 </div>
             </div>
 
@@ -32,12 +31,12 @@
 
         <!-- Selection Section - Bottom 5 -->
         <div class="selection-section" id="selectionSectionBottom">
-            <h1>Select your 5 least favorite watches</h1>
+            <h1>Select your 3 least favorite watches</h1>
 
             <div class="selection-info">
                 <div>
-                    <div class="selection-count" id="bottomCount">0 / 5</div>
-                    <div style="font-size: 0.9rem; color: #666;">Bottom 5 Selected</div>
+                    <div class="selection-count" id="bottomCount">0 / 3</div>
+                    <div style="font-size: 0.9rem; color: #666;">Bottom 3 Selected</div>
                 </div>
             </div>
 
