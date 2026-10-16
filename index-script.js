@@ -55,52 +55,34 @@ async function loadWatches() {
         }
         
         // Store the original set IDs for later ranking URL generation
-        originalWatchSetIds = selectedWatchIds;
+        originalWatchSetIds = selectedWatchIds.slice(); // Make a copy
         
-        // Handle ranking mode: load watches in ranked order
-        if (currentMode === 'r') {
-            // In ranking mode, the IDs are already in ranked order
-            watches = selectedWatchIds.map((watchId, index) => {
-                const watch = allWatchesFromJSON.find(w => w.id === watchId);
-                if (!watch) return null;
-                
-                let image = watch.image;
-                if (image === 'placeholder') {
-                    const imageNum = Math.floor(Math.random() * 11) + 1;
-                    const ext = imageNum === 11 ? 'png' : 'jpg';
-                    image = `watch-images/watch-${imageNum}.${ext}`;
-                }
-                return {
-                    id: index + 1,
-                    jsonId: watch.id,
-                    name: watch.name,
-                    image: image
-                };
-            }).filter(w => w !== null);
+        // Load watches in the proper order (ranked or random selection)
+        watches = selectedWatchIds.map((watchId, index) => {
+            const watch = allWatchesFromJSON.find(w => w.id === watchId);
+            if (!watch) return null;
             
-            // Skip to results view
+            let image = watch.image;
+            if (image === 'placeholder') {
+                const imageNum = Math.floor(Math.random() * 11) + 1;
+                const ext = imageNum === 11 ? 'png' : 'jpg';
+                image = `watch-images/watch-${imageNum}.${ext}`;
+            }
+            return {
+                id: index + 1,
+                jsonId: watch.id,
+                name: watch.name,
+                image: image
+            };
+        }).filter(w => w !== null);
+        
+        // If ranking mode, skip to results view
+        if (currentMode === 'r') {
             allWatches = watches;
             showResults();
         } else {
-            // Choice mode: load watches in random order for ranking
-            watches = selectedWatchIds.map((watchId, index) => {
-                const watch = allWatchesFromJSON.find(w => w.id === watchId);
-                if (!watch) return null;
-                
-                let image = watch.image;
-                if (image === 'placeholder') {
-                    const imageNum = Math.floor(Math.random() * 11) + 1;
-                    const ext = imageNum === 11 ? 'png' : 'jpg';
-                    image = `watch-images/watch-${imageNum}.${ext}`;
-                }
-                return {
-                    id: index + 1,
-                    jsonId: watch.id,
-                    name: watch.name,
-                    image: image
-                };
-            }).filter(w => w !== null);
-            
+            // Choice mode: shuffle watches and initialize selection UI
+            watches = watches.sort(() => Math.random() - 0.5);
             initializeSelection();
         }
     } catch (error) {
@@ -587,5 +569,9 @@ window.copyShareUrl = copyShareUrl;
 window.restart = restart;
 
 window.addEventListener('load', () => {
+    loadWatches();
+});
+
+window.addEventListener('hashchange', () => {
     loadWatches();
 });
